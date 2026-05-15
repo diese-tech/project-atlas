@@ -6,10 +6,23 @@ import sqlite3
 import requests
 import json
 import uuid
+import os
+import logging
+from dotenv import load_dotenv
 
-DB_PATH = "D:/chat.db"
-OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
-SYSTEM_PROMPT = SYSTEM_PROMPT = """You are an expert software engineer. You write production-quality code and respond like a senior colleague, not a tutorial author.
+load_dotenv()
+
+DB_PATH = os.getenv("CHAT_DB_PATH", "chat.db")
+OLLAMA_CHAT_URL = os.getenv("OLLAMA_URL", "http://localhost:11434") + "/api/chat"
+
+logging.basicConfig(
+    format='{"ts":"%(asctime)s","level":"%(levelname)s","component":"chat_server","message":"%(message)s"}',
+    level=logging.INFO,
+    datefmt="%Y-%m-%dT%H:%M:%SZ",
+)
+logger = logging.getLogger("chat_server")
+
+SYSTEM_PROMPT = """You are an expert software engineer. You write production-quality code and respond like a senior colleague, not a tutorial author.
 
 Rules:
 - Write complete, runnable code. Modern idioms: Python (type hints, pathlib, f-strings); JS (const/let, async/await).
@@ -150,7 +163,10 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -169,12 +185,14 @@ app.mount("/static", StaticFiles(directory="."), name="static")
 class ChatRequest(BaseModel):
     session_id: str
     messages: list
-    model: str = "llama3:latest"
+    model: str = "qwen2.5-coder:14b"
 
 
 @app.post("/sessions")
 def new_session():
-    return {"session_id": create_session()}
+    sid = create_session()
+    logger.info(f"session created: {sid}")
+    return {"session_id": sid}
 
 
 @app.get("/sessions")
@@ -185,6 +203,7 @@ def get_sessions():
 @app.delete("/sessions/{session_id}")
 def remove_session(session_id: str):
     delete_session(session_id)
+    logger.info(f"session deleted: {session_id}")
     return {"ok": True}
 
 
@@ -200,6 +219,7 @@ def chat(req: ChatRequest):
 
     user_message = req.messages[-1]["content"]
     is_first_message = session_message_count(req.session_id) == 0
+    logger.info(f"chat session={req.session_id} model={req.model} msg_len={len(user_message)}")
 
     messages = req.messages
     if messages[0].get("role") != "system":
@@ -225,6 +245,7 @@ def chat(req: ChatRequest):
                     if data.get("done"):
                         break
         except Exception as e:
+            logger.error(f"stream error session={req.session_id}: {e}")
             yield f"\n[Error: {str(e)}]"
             return
 

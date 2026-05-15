@@ -8,25 +8,40 @@ Strategy:
   4. Verify: higher refinement level -> fewer rows but cleaner signal
   5. Separately: write refinement signals and confirm the level auto-escalates
 """
+import atexit
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-# Clean slate
-TEST_BASE = Path("C:/AI_refine_test")
-if TEST_BASE.exists():
-    shutil.rmtree(TEST_BASE)
+PROJECT_ROOT = Path(__file__).parent.parent
 
-# Copy the platform
-shutil.copytree("C:/AI", TEST_BASE)
+# Isolated temp workspace — cleaned up automatically on exit
+_tmp = tempfile.mkdtemp(prefix="atlas_refine_test_")
+TEST_BASE = Path(_tmp)
+atexit.register(shutil.rmtree, TEST_BASE, True)
+
+# Copy the platform, skipping generated/heavy directories
+shutil.copytree(
+    str(PROJECT_ROOT),
+    str(TEST_BASE),
+    dirs_exist_ok=True,
+    ignore=shutil.ignore_patterns(
+        ".venv", ".git", "__pycache__", "*.pyc",
+        "data_clean", "data_curated", "models",
+        "training_runs", "evals", "orchestration",
+        "cowork_ops", "logs",
+    ),
+)
 
 # Patch config to point at test base and swap parquet for pickle (no pyarrow in sandbox)
 cfg_path = TEST_BASE / "config" / "config.yaml"
 cfg_text = cfg_path.read_text()
-cfg_text = cfg_text.replace("C:/AI", str(TEST_BASE))
+cfg_text = cfg_text.replace(str(PROJECT_ROOT).replace("\\", "/"), str(TEST_BASE).replace("\\", "/"))
+cfg_text = cfg_text.replace("D:/AI", str(TEST_BASE).replace("\\", "/"))
 cfg_path.write_text(cfg_text)
 
 for script in (TEST_BASE / "scripts").glob("*.py"):

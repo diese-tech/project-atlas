@@ -8,7 +8,7 @@ echo ======================================
 cd /d C:\AI
 
 echo [1/4] Activating environment...
-call venv\Scripts\activate
+call .venv\Scripts\activate
 
 echo [2/4] Running data pipeline...
 python scripts\data_processor.py
@@ -23,6 +23,6 @@ echo ======================================
 echo Launching orchestrator (AUTONOMOUS MODE)
 echo ======================================
 
-python orchestration\orchestrator.py --loop
+python scripts\orchestrator.py
 
 pause
