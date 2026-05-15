@@ -1,7 +1,8 @@
 # ============================================================
 # AUTONOMOUS ML TRAINING LOOP - CONFIGURATION
 # ============================================================
-# All paths are relative to BASE_DIR (C:\AI) unless absolute.
+# Source code lives at C:\AI. Generated output writes to BASE_DIR (D:\AI).
+# data.raw_dir is pinned as an absolute path so raw data stays in the git repo.
 # Changes here drive the orchestrator. No code edits needed
 # for normal tuning.
 # ============================================================

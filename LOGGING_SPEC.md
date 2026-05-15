@@ -1,12 +1,15 @@
 # Logging Format Specification
 
-All logs are written as **JSON Lines** (one JSON object per line) to:
+All logs are written as **JSON Lines** (one JSON object per line).
 
+ML pipeline components write to:
 ```
-C:\AI\logs\<component>.log
+D:\AI\logs\<component>.log
 ```
 
 Components: `data_processor`, `train`, `eval`, `orchestrator`.
+
+The chat server (`chat_server`) logs to **stdout** in the same JSON format.
 
 ## Schema
 
@@ -67,7 +70,7 @@ that deletes the oldest manifests beyond the retention limit.
 
 On Windows PowerShell:
 ```powershell
-Get-Content C:\AI\logs\orchestrator.log -Wait | ConvertFrom-Json
+Get-Content D:\AI\logs\orchestrator.log -Wait | ConvertFrom-Json
 ```
 
 Any JSON-aware tool (jq, Python, Pandas) will parse these directly.
