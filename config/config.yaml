@@ -7,14 +7,14 @@
 # ============================================================
 
 system:
-  base_dir: "C:/AI"
+  base_dir: "D:/AI"
   random_seed: 42
   max_loop_iterations: 10        # hard cap on autonomous loops per run
   halt_on_safety_violation: true
 
 # ---------- DATA PIPELINE ----------
 data:
-  raw_dir: "data_raw"
+  raw_dir: "C:/AI/data_raw"
   clean_dir: "data_clean"
   curated_dir: "data_curated"
   target_column: "target"         # column name to predict
