@@ -1,108 +1,66 @@
 # Project Atlas
 
-Two systems, one repo: a **local AI chat assistant** and an **autonomous ML training loop**, both running entirely on your machine with no cloud dependencies.
+Project Atlas is a **local-first AI workspace** for experimenting with two complementary systems: a persistent Ollama-backed chat assistant and an autonomous machine-learning refinement loop.
 
-| System | Entry point | What it does |
-|---|---|---|
-| Chat App | `start.bat` | FastAPI + Ollama chat UI with persistent session history |
-| ML Loop | `start_pipeline.bat` | Autonomous data → train → eval → decide pipeline |
+Everything runs on the local machine. Cloud services are not required for the core workflows.
 
----
+> **Status:** Experimental but functional. Atlas is a lab for local AI orchestration, persistent assistant state, and repeatable model-training workflows.
 
-## Directory map
+## What’s Included
 
-```
-C:\AI\                        ← source code (git repo)
-├── main.py                   # Chat server (FastAPI + SQLite + Ollama)
-├── index.html                # Chat frontend (single-page browser app)
-├── models.js                 # Ollama model registry
-├── start.bat                 # Start the chat app
-├── start_pipeline.bat        # Start the ML pipeline
-├── .env                      # Local config — gitignored, copy from .env.example
-├── .env.example              # Config template
-├── config/
-│   └── config.yaml           # All ML pipeline tunables
-├── data_raw/                 # Drop training CSVs here (source-controlled)
-├── scripts/
-│   ├── orchestrator.py
-│   ├── data_processor.py
-│   ├── train.py
-│   ├── eval.py
-│   └── utils.py
-└── tests/
-    └── test_refinement.py
+| System | Entry point | Purpose |
+| --- | --- | --- |
+| Local Chat | `start.bat` | FastAPI + Ollama chat UI with persistent SQLite history |
+| ML Pipeline | `start_pipeline.bat` / `scripts/orchestrator.py` | Data → train → evaluate → decide refinement loop |
 
-D:\AI\                        ← generated output (written at runtime)
-├── data_clean/
-├── data_curated/
-├── models/
-├── training_runs/
-├── evals/
-├── orchestration/
-├── cowork_ops/
-└── logs/
+## Local Chat
 
-D:\chat.db                    ← SQLite chat session database
-D:\ollama\                    ← Ollama model files
-```
+The chat application provides:
 
----
-
-## Install
-
-```powershell
-cd C:\AI
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-Copy `.env.example` to `.env` and confirm your paths:
-
-```
-CHAT_DB_PATH=D:/chat.db
-OLLAMA_URL=http://localhost:11434
-```
-
-`pytorch` is optional — only needed if `config.yaml` sets `training.model_type: pytorch_mlp`.
-
----
-
-## Chat App
+- local Ollama model access;
+- browser-based chat UI;
+- persistent SQLite session history;
+- configurable model registry through `models.js`;
+- no required cloud inference dependency.
 
 ### Requirements
 
-- [Ollama](https://ollama.com) running locally
-- At least one model pulled, e.g. `ollama pull qwen2.5-coder:14b`
+- Python environment from `requirements.txt`
+- Ollama running locally
+- At least one compatible model pulled into Ollama
 
 ### Start
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
 .\start.bat
 ```
 
-Opens a browser to `http://127.0.0.1:5500`. Backend runs on port 8000.
+The browser UI runs locally and connects to the FastAPI backend.
 
-### Environment variables (`.env`)
+## Autonomous ML Loop
 
-| Variable | Default | Description |
-|---|---|---|
-| `CHAT_DB_PATH` | `chat.db` | Path to SQLite session database |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama base URL |
+Atlas also contains a repeatable training pipeline that processes raw data, trains a model, evaluates the result, and decides whether to promote, refine, or tune the next run.
 
-### Models
+Core properties:
 
-Edit `models.js` to add or remove models from the UI dropdown. The first entry is the default.
+- deterministic seeds for reproducibility;
+- dataset fingerprints and lineage manifests;
+- configurable refinement levels;
+- promotion/rollback decisions based on evaluation thresholds;
+- bounded retry behavior and explicit safety stops;
+- support for the current scikit-learn and optional PyTorch model paths.
 
----
+### Run the pipeline
 
-## ML Training Loop
+```powershell
+python scripts\orchestrator.py
+```
 
-### Prepare data
-
-Drop one or more CSVs into `C:\AI\data_raw`. They must contain the target column defined in `config.yaml` (default: `target`, integer-valued).
-
-### Run a single stage (useful for debugging)
+Individual stages can also be run directly for debugging:
 
 ```powershell
 python scripts\data_processor.py
@@ -110,82 +68,36 @@ python scripts\train.py
 python scripts\eval.py
 ```
 
-Each prints its output ID to stdout (e.g. `MODEL_ID=model_...`).
+Configuration lives in `config/config.yaml`.
 
-### Run the autonomous loop
+## Repository Layout
 
-```powershell
-python scripts\orchestrator.py
+```text
+main.py                 Local chat server
+index.html              Browser chat UI
+models.js               Ollama model registry
+config/                  ML pipeline configuration
+scripts/                 Processing, training, evaluation, orchestration
+tests/                   Pipeline tests
+data_raw/                Input datasets
 ```
 
-Optional flags:
-- `--max-iters N` — override `system.max_loop_iterations`
-- `--rollback`    — revert `promoted.json` to the previous model and exit
+Generated runtime artifacts are intentionally separated from source-controlled project files. Paths are configurable through `.env` and `config/config.yaml`.
 
-The orchestrator writes a full report to `D:\AI\orchestration\<master_run_id>.json`.
+## Safety and Reproducibility
 
-### How the decision logic works
+The training loop is designed to halt instead of silently continuing when core assumptions break. Examples include unexpected raw-data changes, missing manifests, invalid evaluation output, overwrite risk, or repeated stage failure.
 
-After each eval, the orchestrator compares the current score to the previous promoted score:
+A promoted model is left untouched when the pipeline halts unexpectedly.
 
-| Condition | Action |
-|---|---|
-| `score > prev + improvement_delta` | **promote** |
-| `score < prev - improvement_delta` | **refine_data** (escalate cleaning; rollback after 2 consecutive regressions) |
-| Within delta, `plateau_counter < tolerance` | hold |
-| Within delta, `plateau_counter >= tolerance` | **tune_hyperparams** (advance sweep) |
+## Extending Atlas
 
-All thresholds live in `config.yaml` under `orchestrator` and `evaluation`.
+Atlas is intentionally modular. Common extension points include:
 
-### Refinement levels
+- new dataset loaders or cleaning strategies;
+- additional model backends;
+- new evaluation/drift metrics;
+- additional refinement policies;
+- richer local-agent capabilities layered over the existing chat runtime.
 
-When the orchestrator signals regression, it writes a `refine_request_*.json` file into `D:\AI\cowork_ops\`. The data pipeline reads these signals on the next run and escalates cleaning based on how many are pending:
-
-| Level | Operations |
-|---|---|
-| 0 (baseline) | dedupe, normalize formatting, schema validate |
-| 1 (mild) | + drop rows with any NaN in features |
-| 2 (moderate) | + remove outliers (>3σ on any numeric feature) |
-| 3 (aggressive) | + drop low-variance features + undersample majority class |
-
-The level is capped at 3. Once a signal is consumed it moves to `cowork_ops/processed/` so it never triggers twice.
-
-Force a level manually:
-
-```powershell
-python scripts\data_processor.py --refinement-level 2
-```
-
-### Safety stops
-
-The system halts (raising `SafetyViolation`) if:
-
-1. `data_raw` fingerprint changes between pipeline start and end
-2. A curated dataset manifest is missing
-3. An evaluation produces an invalid JSON structure
-4. A model checkpoint would be silently overwritten (archived instead)
-5. Any stage fails more than `orchestrator.retry_on_failure` times
-
-On halt, the current promoted model is untouched and the master run report records the halt reason.
-
-### Swapping the model backend
-
-In `config.yaml`:
-
-```yaml
-training:
-  model_type: sklearn_logreg   # or pytorch_mlp
-```
-
-No code changes required.
-
-### Extending
-
-- **New data formats**: extend `data_processor.load_raw_files`
-- **New model type**: add a branch in `train.train_*` and update `eval.load_model` / `eval.predict`
-- **New drift metric**: add a detector to `eval.py` and fold it into `composite_score`
-- **New refinement level**: add a function in `data_processor.py` and gate it on `level >= N`
-
-### Reproducibility
-
-Seeds are set for `random`, `numpy`, and `torch` (when used). The same raw data + config produces identical curated splits, models, and eval scores. Dataset fingerprints are stored in every manifest for lineage tracing.
+Keep experiments local-first, observable, and reversible. New automation should preserve explicit boundaries around filesystem access, model execution, and durable state.
